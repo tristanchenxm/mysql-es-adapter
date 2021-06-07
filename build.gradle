@@ -1,0 +1,69 @@
+plugins {
+    id 'java'
+    id 'java-library'
+    id 'org.springframework.boot' version '2.3.10.RELEASE' apply false
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+}
+
+group = 'nameless.mysql-es-adapter'
+version = '1.0'
+
+apply plugin: 'java'
+apply plugin: 'java-library'
+apply plugin: 'io.spring.dependency-management'
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+repositories {
+    maven { url "https://repo.maven.apache.org/maven2" }
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+    }
+}
+dependencies {
+    constraints {
+        api 'org.projectlombok:lombok:1.18.12'
+    }
+    compileOnly('org.projectlombok:lombok')
+    annotationProcessor('org.projectlombok:lombok')
+    testCompileOnly('org.projectlombok:lombok')
+    testAnnotationProcessor('org.projectlombok:lombok')
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+    implementation('org.slf4j:slf4j-api:1.7.30')
+    implementation('org.springframework.boot:spring-boot-starter-web')
+    implementation('org.springframework.boot:spring-boot-starter-jdbc')
+    implementation('org.springframework.boot:spring-boot-starter-data-elasticsearch')
+    implementation('org.hibernate.validator:hibernate-validator')
+    implementation('org.apache.kafka:kafka-clients')
+    implementation('mysql:mysql-connector-java')
+    implementation('com.alibaba.otter:canal.client:1.1.4')
+
+    testImplementation('com.h2database:h2')
+    testImplementation('org.springframework.boot:spring-boot-starter-test')
+}
+
+jar.manifest.attributes 'Main-Class': 'nameless.canal.Main'
+
+task copyLibs(dependsOn: classes, type: Copy) {
+    into "build/${project.libsDirName}/lib"
+    from configurations.runtimeClasspath
+}
+
+jar {
+    dependsOn copyLibs
+    manifest {
+        attributes(
+                'Class-Path': ". ${configurations.runtimeClasspath.collect { './lib/' + it.getName() }.join(' ')}"
+        )
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

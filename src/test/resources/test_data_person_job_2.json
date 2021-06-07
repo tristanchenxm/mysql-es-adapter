@@ -1,0 +1,19 @@
+[
+  {
+    "table": "person_job",
+    "eventType": "UPDATE",
+    "beforeColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "2"},
+      {"index": 1, "mysqlType": "varchar", "name": "employer", "value": "Employer-2"},
+      {"index": 2, "mysqlType": "varchar", "name":  "job_title", "value": "engineer"},
+      {"index": 3, "mysqlType": "decimal", "name":  "salary", "value": 1000.00}
+    ],
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "3", "updated": true},
+      {"index": 1, "mysqlType": "varchar", "name": "employer", "value": "Employer-2"},
+      {"index": 2, "mysqlType": "varchar", "name":  "job_title", "value": "engineer"},
+      {"index": 3, "mysqlType": "decimal", "name":  "salary", "value": 1000.00}
+    ],
+    "sql": "update person_job set person_id=3 where person_id=2"
+  }
+]

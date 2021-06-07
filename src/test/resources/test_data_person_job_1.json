@@ -1,0 +1,24 @@
+[
+  {
+    "table": "person_job",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
+      {"index": 1, "mysqlType": "varchar", "name": "employer", "value": "Employer-1"},
+      {"index": 2, "mysqlType": "varchar", "name":  "job_title", "value": "manager"},
+      {"index": 3, "mysqlType": "decimal", "name":  "salary", "value": 3000.00}
+    ],
+    "sql": "insert into person_job(person_id, employer, job_title, salary) values (1, 'Employer-1', 'manager', 3000.00)"
+  },
+  {
+    "table": "person_job",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "2"},
+      {"index": 1, "mysqlType": "varchar", "name": "employer", "value": "Employer-2"},
+      {"index": 2, "mysqlType": "varchar", "name":  "job_title", "value": "engineer"},
+      {"index": 3, "mysqlType": "decimal", "name":  "salary", "value": 1000.00}
+    ],
+    "sql": "insert into person_job(person_id, employer, job_title, salary) values (2, 'Employer-2', 'engineer', 1000.00)"
+  }
+]

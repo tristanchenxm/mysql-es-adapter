@@ -1,0 +1,160 @@
+# -- BEGIN TABLE SCHEMA
+# CREATE TABLE person (
+#	id INT PRIMARY KEY,
+#	`name` VARCHAR(100) NOT NULL,
+#	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+#	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
+# );
+#
+# CREATE TABLE person_info(
+#	person_id INT NOT NULL PRIMARY KEY,
+#	age INT NOT NULL,
+#	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+#	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
+# );
+#
+# CREATE TABLE person_job(
+#	person_id INT NOT NULL PRIMARY KEY,
+#	employer VARCHAR(255),
+#	job_title VARCHAR(100),
+#	salary DECIMAL(10,2)
+# );
+#
+# CREATE TABLE `event` (
+#	id INT PRIMARY KEY,
+#	person_id INT NOT NULL,
+#	event_name VARCHAR(128) NOT NULL,
+#	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+#	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+#	KEY (person_id)
+# );
+#
+# CREATE TABLE relative(
+#	id INT PRIMARY KEY,
+#	person_id_1 INT NOT NULL,
+#	person_id_2 INT NOT NULL,
+#	relation VARCHAR(32) NOT NULL,
+#	KEY (person_id_1),
+#	KEY (person_id_2)
+# );
+# -- END TABLE SCHEMA
+
+spring:
+  elasticsearch:
+    rest:
+      uris:
+        - 192.168.133.63:9200
+      #connectionTimeout: 60000
+  datasource:
+    initialization-mode: never
+    url: jdbc:mysql://192.168.133.63:3306/elasticsearch_test?useLegacyDatetimeCode=false&useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&connectTimeout=2000&sessionVariables=character_set_connection=utf8mb4,character_set_client=utf8mb4
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password:
+
+canal:
+  # [DIRECT_CLIENT:KAFKA_CLIENT]，以下direct-client或者kafak-client二选一配置即可
+  client-type: DIRECT_CLIENT
+  direct-client:
+    host: 192.168.133.63
+    port: 11111
+    username:
+    password:
+    subscribe: elasticsearch_test\..*
+    destination: elasticsearch_test
+    batchSize: 100
+  kafka-client:
+    servers: 127.0.0.1:9092
+    topic: elasticsearch_test
+    partition: 0
+    groupId: es-adapter
+    batchSize: 1000
+
+sync-config:
+  mappings:
+    - table: person # 表名
+      es-index: person # es索引名
+      id: id # 表id列
+      simple-properties:
+        # 简单字段列表，格式columnName[:[string|int|long|float|double|decimal|boolean|date]]
+        - id
+        - name
+        - create_time
+        - update_time
+      constructed-properties: # 由sql构建的字段
+        - name: age # es index field
+          # [FLAT_SIMPLE_PROPERTY|FLAT_LIST|NESTED_OBJECT|NESTED_OBJECT_LIST]，决定构建字段是简单普通字段、简单列表字段，嵌套对象还是嵌套对象列表
+          join-type: FLAT_SIMPLE_PROPERTY
+          # 主表数据变更时，是否触发关联字段重新构建。多数情况一般是先有主表记录，再插入关联表，所以默认为false
+          construct-on-main-table-change: true
+          # 构建sql, 动态参数以":column"格式，column必须在simple-properties中。Nullable
+          sql: >
+            select age
+            from person_info
+            where person_id=:id
+          reconstruction-condition: # 重新构建字段条件
+            table: person_info # 发生数据变更的表
+            # 哪些列发生变更时触发，逗号分隔，空或者"*"代表任意列
+            on-columns-updated: person_id, age
+            # 重新构建sql，动态参数以":column"格式, {column}必须是在{table}中的列名
+            retrieve-sql: >
+              select age
+              from person_info
+              where person_id=:person_id
+            # 表person_info的哪一列映射到es index ID
+            index-id: person_id
+
+        # ================================
+        # =========== 新构建属性 ===========
+        # ================================
+        - name: children
+          join-type: FLAT_LIST
+          construct-on-main-table-change: true
+          sql: >
+            select person_id_2
+            from relative
+            where person_id_1=:id and relation='CHILD'
+          reconstruction-condition:
+            table: relative
+            on-columns-updated: person_id_1, person_id_2, relation
+            retrieve-sql: >
+              select person_id_2
+              from relative
+              where person_id_1=:person_id_1 and relation='CHILD'
+            index-id: person_id_1
+
+        # ================================
+        # =========== 新构建属性 ===========
+        # ================================
+        - name: events
+          join-type: NESTED_OBJECT_LIST
+          construct-on-main-table-change: true
+          sql: >
+            select id, event_name, create_time, update_time
+            from `event`
+            where person_id=:id
+          reconstruction-condition:
+            table: event
+            retrieve-sql: >
+              select id, event_name, create_time, update_time
+              from `event`
+              where person_id=:person_id
+            index-id: person_id
+
+        # ================================
+        # =========== 新构建属性 ===========
+        # ================================
+        - name: job
+          join_type: NESTED_OBJECT
+          construct-on-main-table-change: false
+          sql: >
+            select employer, job_title, salary
+            from person_job
+            where person_id=:id
+          reconstruction-condition:
+            table: person_job
+            retrieve-sql: >
+              select employer, job_title, salary
+              from person_job
+              where person_id=:person_id
+            index-id: person_id

@@ -1,0 +1,30 @@
+[
+  {
+    "table": "person_info",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
+      {"index": 1, "mysqlType": "int", "name": "age", "value": "1"},
+      {"index": 2, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 00:00:00"},
+      {"index": 3, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 00:00:00"}
+    ],
+    "sql": "insert into person_info(person_id, age, create_time, update_time) values (1, 1, '2021-01-01 00:00:00', '2021-01-01 00:00:00')"
+  },
+  {
+    "table": "person_info",
+    "eventType": "UPDATE",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
+      {"index": 1, "mysqlType": "int", "name": "age", "value": "2", "updated": true},
+      {"index": 2, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 01:00:00"},
+      {"index": 3, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 01:00:00"}
+    ],
+    "beforeColumns": [
+      {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
+      {"index": 1, "mysqlType": "int", "name": "age", "value": "1"},
+      {"index": 2, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 01:00:00"},
+      {"index": 3, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 01:00:00"}
+    ],
+    "sql": "update person_info set age=2 where person_id=1"
+  }
+]

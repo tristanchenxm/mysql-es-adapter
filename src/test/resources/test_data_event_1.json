@@ -1,0 +1,38 @@
+[
+  {
+    "table": "event",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "id", "value": "1"},
+      {"index": 1, "mysqlType": "int", "name": "person_id", "value": "1"},
+      {"index": 2, "mysqlType": "varchar", "name": "event_name", "value": "E-1"},
+      {"index": 3, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 00:00:00"},
+      {"index": 4, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 00:00:00"}
+    ],
+    "sql": "insert into event(id, person_id, event_name, create_time, update_time) values (1, 1, 'E-1', '2021-01-01 00:00:00', '2021-01-01 00:00:00')"
+  },
+  {
+    "table": "event",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "id", "value": "2"},
+      {"index": 1, "mysqlType": "int", "name": "person_id", "value": "1"},
+      {"index": 2, "mysqlType": "varchar", "name": "event_name", "value": "E-2"},
+      {"index": 3, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 00:00:00"},
+      {"index": 4, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 00:00:00"}
+    ],
+    "sql": "insert into event(id, person_id, event_name, create_time, update_time) values (2, 1, 'E-2', '2021-01-01 00:00:00', '2021-01-01 00:00:00')"
+  },
+  {
+    "table": "event",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "id", "value": "3"},
+      {"index": 1, "mysqlType": "int", "name": "person_id", "value": "2"},
+      {"index": 2, "mysqlType": "varchar", "name": "event_name", "value": "E-3"},
+      {"index": 3, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 00:00:00"},
+      {"index": 4, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 00:00:00"}
+    ],
+    "sql": "insert into event(id, person_id, event_name, create_time, update_time) values (3, 2, 'E-3', '2021-01-01 00:00:00', '2021-01-01 00:00:00')"
+  }
+]
