@@ -11,7 +11,7 @@ canal:
   # [DIRECT_CLIENT:KAFKA_CLIENT]，以下direct-client或者kafka-client二选一配置即可
   client-type: DIRECT_CLIENT
   direct-client:
-    host: 192.168.133.63
+    host: 127.0.0.1
     username:
     password:
     subscribe: elasticsearch_test\..*
