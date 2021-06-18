@@ -43,11 +43,11 @@ spring:
   elasticsearch:
     rest:
       uris:
-        - 192.168.133.63:9200
+        - 127.0.0.1:9200
       #connectionTimeout: 60000
   datasource:
     initialization-mode: never
-    url: jdbc:mysql://192.168.133.63:3306/elasticsearch_test?useLegacyDatetimeCode=false&useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&connectTimeout=2000&sessionVariables=character_set_connection=utf8mb4,character_set_client=utf8mb4
+    url: jdbc:mysql://127.0.0.1:3306/elasticsearch_test?useLegacyDatetimeCode=false&useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&connectTimeout=2000&sessionVariables=character_set_connection=utf8mb4,character_set_client=utf8mb4
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password:
@@ -56,7 +56,7 @@ canal:
   # [DIRECT_CLIENT:KAFKA_CLIENT]，以下direct-client或者kafak-client二选一配置即可
   client-type: DIRECT_CLIENT
   direct-client:
-    host: 192.168.133.63
+    host: 127.0.0.1
     port: 11111
     username:
     password:
