@@ -14,7 +14,7 @@ import java.net.UnknownHostException;
 @Slf4j
 @SpringBootApplication
 public class Main {
-    public static void main(String[] args) throws UnknownHostException {
+    public static void main(String[] args) {
         SpringApplication application = new SpringApplication(Main.class);
         application.addListeners((ApplicationListener<ContextClosedEvent>) event -> {
             getCanalClient(event.getApplicationContext()).shutdown();

@@ -99,14 +99,12 @@ public class CanalClientTest {
                         .setUpdated(column.isUpdated())
                         .build());
             });
-            row.getBeforeColumns().forEach(column -> {
-                rowDataBuilder.addBeforeColumns(CanalEntry.Column.newBuilder()
-                        .setMysqlType(column.getMysqlType())
-                        .setIndex(column.getIndex())
-                        .setName(column.getName())
-                        .setValue(column.getValue())
-                        .build());
-            });
+            row.getBeforeColumns().forEach(column -> rowDataBuilder.addBeforeColumns(CanalEntry.Column.newBuilder()
+                    .setMysqlType(column.getMysqlType())
+                    .setIndex(column.getIndex())
+                    .setName(column.getName())
+                    .setValue(column.getValue())
+                    .build()));
             CanalEntry.RowData rowData = rowDataBuilder.build();
             RowChange rowChange = RowChange.newBuilder()
                     .addRowDatas(rowData)
@@ -132,20 +130,17 @@ public class CanalClientTest {
     }
 
     private void testInsertPerson(List<RawRow> inserts) {
-        ArgumentCaptor<IndexQuery> indexQueryCapture = ArgumentCaptor.forClass(IndexQuery.class);
+        ArgumentCaptor<List<IndexQuery>> indexQueryCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
         canalClient.handleEntries(getEntries(inserts));
-        verify(operations, times(inserts.size()))
-                .index(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
-
-
+        verify(operations, times(1))
+                .bulkIndex(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
         for (int i = 0; i < inserts.size(); i++) {
-            RawRow row = inserts.get(i);
-            assertInserts(indexQueryCapture, indexQueryCapture.getAllValues().get(i), row);
+            assertInserts(indexQueryCapture.getAllValues().get(0).get(i), inserts.get(i));
         }
     }
 
-    private void assertInserts(ArgumentCaptor<IndexQuery> indexQueryCapture, IndexQuery indexQuery, RawRow row) {
+    private void assertInserts(IndexQuery indexQuery, RawRow row) {
         Map<String, Object> data = (Map<String, Object>) indexQuery.getObject();
         Assertions.assertNotNull(data);
         List<RawColumn> insertedColumns = row.getAfterColumns();
@@ -163,14 +158,15 @@ public class CanalClientTest {
     private void testUpdatePerson(List<RawRow> updates) {
         given(operations.exists(anyString(), any(IndexCoordinates.class))).willReturn(true);
         given(operations.update(any(UpdateQuery.class), any(IndexCoordinates.class))).willReturn(new UpdateResponse(UpdateResponse.Result.UPDATED));
-        ArgumentCaptor<UpdateQuery> updateQueryCapture = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
         canalClient.handleEntries(getEntries(updates));
-        verify(operations, times(updates.size()))
-                .update(updateQueryCapture.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkUpdate(updateQueryCapture.capture(), indexCoordinatesCaptor.capture());
+        List<UpdateQuery> updateQueries = updateQueryCapture.getAllValues().get(0);
         for (int i = 0; i < updates.size(); i++) {
             RawRow row = updates.get(i);
-            UpdateQuery updateQuery = updateQueryCapture.getAllValues().get(i);
+            UpdateQuery updateQuery = updateQueries.get(i);
             Assertions.assertEquals(updateQuery.getId(), row.getAfterColumnValue("id"));
             Document data = updateQuery.getDocument();
             Assertions.assertNotNull(data);
@@ -201,8 +197,8 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_personInfo_1() throws Exception {
         reset(operations);
-        ArgumentCaptor<IndexQuery> indexQueryCapture = ArgumentCaptor.forClass(IndexQuery.class);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<IndexQuery>> indexQueryCapture = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
         List<RawRow> personRows = readList("test_data_person_1.json");
@@ -214,14 +210,15 @@ public class CanalClientTest {
         entries.addAll(fieldEntries);
         canalClient.handleEntries(entries);
 
-        verify(operations, times(insertPersonEntries.size()))
-                .index(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkIndex(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
         verify(operations, times(0))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+        List<IndexQuery> indexQueries = indexQueryCapture.getAllValues().get(0);
         for (int i = 0; i < insertPersonEntries.size(); i++) {
             RawRow row = insertPersonRows.get(i);
-            IndexQuery indexQuery = indexQueryCapture.getAllValues().get(i);
-            assertInserts(indexQueryCapture, indexQuery, row);
+            IndexQuery indexQuery = indexQueries.get(i);
+            assertInserts(indexQuery, row);
             ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
                     .stream().filter(p -> p.getName().equals("age")).findFirst().get();
             String sql = prop.getSql();
@@ -239,22 +236,36 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_personInfo_2() throws Exception {
         reset(operations);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
         List<RawRow> fieldRows = readList("test_data_person_info_1.json");
         List<Entry> fieldEntries = getEntries(fieldRows);
         given(operations.exists(anyString(), any(IndexCoordinates.class))).willReturn(true);
-        given(operations.update(any(UpdateQuery.class), any(IndexCoordinates.class))).willReturn(new UpdateResponse(UpdateResponse.Result.UPDATED));
         canalClient.handleEntries(fieldEntries);
-        verify(operations, times(fieldRows.size()))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
 
-        ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
-                .stream().filter(p -> p.getName().equals("age")).findFirst().get();
-        for (int i = 0; i < fieldRows.size(); i++) {
-            RawRow sqlDataRow = fieldRows.get(i);
-            UpdateQuery updateQuery = updateQueryCaptor.getAllValues().get(i);
+        List<UpdateQuery> updateQueries = updateQueryCaptor.getAllValues().get(0);
+        String idColumnName = "person_id";
+        List<RawRow> deduplicatedRows = new ArrayList<>();
+        for (RawRow row : fieldRows) {
+            boolean foundPrevious = false;
+            for (int i = 0; i < deduplicatedRows.size(); i++) {
+                RawRow previousSetRow = deduplicatedRows.get(i);
+                if (previousSetRow.getAfterColumnValue(idColumnName).equals(row.getAfterColumnValue(idColumnName))) {
+                    deduplicatedRows.set(i, row);
+                    foundPrevious = true;
+                    break;
+                }
+            }
+            if (!foundPrevious) {
+                deduplicatedRows.add(row);
+            }
+        }
+        for (int i = 0; i < deduplicatedRows.size(); i++) {
+            RawRow sqlDataRow = deduplicatedRows.get(i);
+            UpdateQuery updateQuery = updateQueries.get(i);
             Assertions.assertEquals(1, updateQuery.getDocument().keySet().size());
             Integer age = (Integer) updateQuery.getDocument().get("age");
             Assertions.assertEquals(sqlDataRow.getAfterColumnValue("age"), age.toString());
@@ -265,8 +276,8 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_event_1() throws Exception {
         reset(operations);
-        ArgumentCaptor<IndexQuery> indexQueryCapture = ArgumentCaptor.forClass(IndexQuery.class);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<IndexQuery>> indexQueryCapture = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
         List<RawRow> personRows = readList("test_data_person_1.json");
@@ -278,14 +289,15 @@ public class CanalClientTest {
         entries.addAll(fieldEntries);
         canalClient.handleEntries(entries);
 
-        verify(operations, times(insertPersonEntries.size()))
-                .index(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkIndex(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
         verify(operations, times(0))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+        List<IndexQuery> indexQueries = indexQueryCapture.getAllValues().get(0);
         for (int i = 0; i < insertPersonEntries.size(); i++) {
             RawRow row = insertPersonRows.get(i);
-            IndexQuery indexQuery = indexQueryCapture.getAllValues().get(i);
-            assertInserts(indexQueryCapture, indexQuery, row);
+            IndexQuery indexQuery = indexQueries.get(i);
+            assertInserts(indexQuery, row);
             ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
                     .stream().filter(p -> p.getName().equals("events")).findFirst().get();
             String sql = prop.getSql();
@@ -303,23 +315,19 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_event_2() throws Exception {
         reset(operations);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
-        List<RawRow> personRows = readList("test_data_person_1.json");
-        List<RawRow> insertPersonRows = personRows.stream().filter(row -> row.getEventType() == EventType.INSERT).collect(Collectors.toList());
-        List<Entry> insertPersonEntries = getEntries(insertPersonRows);
         List<RawRow> fieldRows = readList("test_data_event_1.json");
         List<Entry> fieldEntries = getEntries(fieldRows);
         given(operations.exists(anyString(), any(IndexCoordinates.class))).willReturn(true);
-        given(operations.update(any(UpdateQuery.class), any(IndexCoordinates.class))).willReturn(new UpdateResponse(UpdateResponse.Result.UPDATED));
         canalClient.handleEntries(fieldEntries);
 
-        Map<String, List<RawRow>> groups = fieldRows.stream().collect(Collectors.groupingBy(r -> r.getAfterColumnValue("person_id")));
-        verify(operations, times(groups.size()))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
-        for (int i = 0; i < insertPersonEntries.size(); i++) {
-            RawRow row = insertPersonRows.get(i);
+        verify(operations, times(1))
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+        List<UpdateQuery> updateQueries = updateQueryCaptor.getAllValues().get(0);
+        for (int i = 0; i < fieldRows.size(); i++) {
+            RawRow row = fieldRows.get(i);
             ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
                     .stream().filter(p -> p.getName().equals("events")).findFirst().get();
             String sql = prop.getReconstructionCondition().getRetrieveSql();
@@ -328,7 +336,7 @@ public class CanalClientTest {
             List<Map<String, Object>> sqlResult = mysqlRepository.fetch(sql, sqlParams);
             if (!sqlResult.isEmpty()) {
                 int eventSize = sqlResult.size();
-                UpdateQuery updateQuery = updateQueryCaptor.getAllValues().get(i);
+                UpdateQuery updateQuery = updateQueries.get(i);
                 Document data = updateQuery.getDocument();
                 Assertions.assertEquals(eventSize, ((List<?>) data.get("events")).size());
             }
@@ -338,8 +346,8 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_relative_1() throws Exception {
         reset(operations);
-        ArgumentCaptor<IndexQuery> indexQueryCapture = ArgumentCaptor.forClass(IndexQuery.class);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<IndexQuery>> indexQueryCapture = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
         List<RawRow> personRows = readList("test_data_person_1.json");
@@ -351,16 +359,17 @@ public class CanalClientTest {
         entries.addAll(fieldEntries);
         canalClient.handleEntries(entries);
 
-        verify(operations, times(insertPersonEntries.size()))
-                .index(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkIndex(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
         verify(operations, times(0))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
         Map<String, List<RawRow>> grouping = fieldRows.stream().collect(Collectors.groupingBy(r -> r.getAfterColumnValue("person_id_1")));
+        List<IndexQuery> indexQueries = indexQueryCapture.getAllValues().get(0);
         for (int i = 0; i < insertPersonEntries.size(); i++) {
             RawRow row = insertPersonRows.get(i);
             String idValue = row.getAfterColumnValue("id");
-            IndexQuery indexQuery = indexQueryCapture.getAllValues().get(i);
-            assertInserts(indexQueryCapture, indexQuery, row);
+            IndexQuery indexQuery = indexQueries.get(i);
+            assertInserts(indexQuery, row);
             ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
                     .stream().filter(p -> p.getName().equals("children")).findFirst().get();
             String sql = prop.getSql();
@@ -381,23 +390,23 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_personJob_1() throws Exception {
         reset(operations);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
         List<RawRow> fieldRows = readList("test_data_person_job_1.json");
         List<Entry> fieldEntries = getEntries(fieldRows);
         given(operations.exists(anyString(), any(IndexCoordinates.class))).willReturn(true);
-        given(operations.update(any(UpdateQuery.class), any(IndexCoordinates.class))).willReturn(new UpdateResponse(UpdateResponse.Result.UPDATED));
         canalClient.handleEntries(fieldEntries);
-        verify(operations, times(fieldRows.size()))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
 
         ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
                 .stream().filter(p -> p.getName().equals("job")).findFirst().get();
         List<SimpleProperty> jobFields = prop.getReconstructionCondition().getDataColumns();
+        List<UpdateQuery> updateQueries = updateQueryCaptor.getAllValues().get(0);
         for (int i = 0; i < fieldRows.size(); i++) {
             RawRow sqlDataRow = fieldRows.get(i);
-            UpdateQuery updateQuery = updateQueryCaptor.getAllValues().get(i);
+            UpdateQuery updateQuery = updateQueries.get(i);
             Assertions.assertEquals(1, updateQuery.getDocument().keySet().size());
             Map<String, Object> esUpdateFields = (Map<String, Object>) updateQuery.getDocument().get("job");
             jobFields.forEach(jobField -> {
@@ -410,27 +419,27 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_personJob_2() throws Exception {
         reset(operations);
-        ArgumentCaptor<UpdateQuery> updateQueryCaptor = ArgumentCaptor.forClass(UpdateQuery.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
         List<RawRow> fieldRows = readList("test_data_person_job_2.json");
         List<Entry> fieldEntries = getEntries(fieldRows);
         RawRow row = fieldRows.get(0);
         given(operations.exists(anyString(), any(IndexCoordinates.class))).willReturn(true);
-        given(operations.update(any(UpdateQuery.class), any(IndexCoordinates.class))).willReturn(new UpdateResponse(UpdateResponse.Result.UPDATED));
         canalClient.handleEntries(fieldEntries);
-        verify(operations, times(2))
-                .update(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
+        verify(operations, times(1))
+                .bulkUpdate(updateQueryCaptor.capture(), indexCoordinatesCaptor.capture());
 
         ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
                 .stream().filter(p -> p.getName().equals("job")).findFirst().get();
         List<SimpleProperty> jobFields = prop.getReconstructionCondition().getDataColumns();
-        UpdateQuery updateQuery0 = updateQueryCaptor.getAllValues().get(0);
+        UpdateQuery updateQuery0 = updateQueryCaptor.getAllValues().get(0).get(0);
+        // person_id变化，先清空原person_id的job字段，再添加到新person_id的job
         Map<String, Object> esUpdateFields0 = (Map<String, Object>) updateQuery0.getDocument().get("job");
         Assertions.assertNull(esUpdateFields0);
         Assertions.assertEquals(row.getBeforeColumnValue("person_id"), updateQuery0.getId());
 
-        UpdateQuery updateQuery1 = updateQueryCaptor.getAllValues().get(1);
+        UpdateQuery updateQuery1 = updateQueryCaptor.getAllValues().get(0).get(1);
         Map<String, Object> esUpdateFields1 = (Map<String, Object>) updateQuery1.getDocument().get("job");
         Assertions.assertNotNull(esUpdateFields1);
         jobFields.forEach(jobField -> {
