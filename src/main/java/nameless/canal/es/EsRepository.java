@@ -44,7 +44,7 @@ public class EsRepository {
         }).collect(Collectors.toList());
         operations.bulkIndex(indexQueries, IndexCoordinates.of(indexName));
         log.info("{} documents indexed into {}. id list: {}", inserts.size(), indexName,
-                String.join(", ", inserts.stream().map(UpdateObject::getId).collect(Collectors.toList())));
+                inserts.stream().map(UpdateObject::getId).collect(Collectors.joining(", ")));
     }
 
     public boolean exists(String indexName, String id) {
