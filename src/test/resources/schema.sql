@@ -10,6 +10,7 @@ CREATE TABLE person_info
 (
     person_id   INT NOT NULL PRIMARY KEY,
     age         INT NOT NULL,
+    gender      VARCHAR(10) NOT NULL,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
 );

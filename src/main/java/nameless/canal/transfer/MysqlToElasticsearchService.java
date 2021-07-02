@@ -128,6 +128,9 @@ public class MysqlToElasticsearchService {
         updateObjects.getUpdates().stream()
                 .collect(Collectors.groupingBy(UpdateObject::getIndexName))
                 .forEach(esRepository::bulkUpdate);
+        if (updateObjects.isNotEmpty()) {
+            log.info("Total {} insert/update/delete operations done", updateObjects.size());
+        }
     }
 
     /**
@@ -306,8 +309,11 @@ public class MysqlToElasticsearchService {
             // 如果构建方式是直接取变更后的binlog数据，则一定要更新
             return true;
         }
+        // 查找已经在缓存中排队准备insert/update/delete的index文档对象
+        // 不在队列中或者虽然文档对象在队列中，但是对应的property并未有更新过，则需要更新对象
+        // 否则忽略该条binlog
         UpdateObject queueingUpdateObject = updateObjects.find(indexName, indexId);
-        String propertyName = constructedProperty.getName();
+        String propertyName = constructedProperty.getPropertyNames()[0];
         return queueingUpdateObject == null || !queueingUpdateObject.hasSetValue(propertyName);
     }
 
@@ -325,31 +331,31 @@ public class MysqlToElasticsearchService {
      * 处理构建字段
      */
     private Map<String, Object> doConstructProperty(ConstructedProperty constructedPropertyConfig,
-                                                    List<Map<String, Object>> constructedList) {
-        convertDateToRecognizable(constructedList);
+                                                    List<Map<String, Object>> dataList) {
+        convertDateToRecognizable(dataList);
         Map<String, Object> changeData = new HashMap<>();
         String propertyName = constructedPropertyConfig.getName();
         switch (constructedPropertyConfig.getJoinType()) {
             case FLAT_SIMPLE_PROPERTY:
-                assertSingleProperty(constructedList, propertyName);
-                List<Object> values = constructedList.stream()
-                        .map(row -> row.entrySet().iterator().next().getValue()).collect(Collectors.toList());
-
-                assertSingletonList(values, propertyName);
-                changeData.put(propertyName, values.isEmpty() ? null : values.get(0));
+                assertSingletonList(dataList, propertyName);
+                Map<String, Object> rowData = dataList.isEmpty() ? Collections.emptyMap() : dataList.get(0);
+                // 可以允许多个property
+                for (String pn : constructedPropertyConfig.getPropertyNames()) {
+                    changeData.put(pn, rowData.get(pn));
+                }
                 break;
             case FLAT_LIST:
-                assertSingleProperty(constructedList, propertyName);
-                values = constructedList.stream()
+                assertSingleProperty(dataList, propertyName);
+                List<Object> values = dataList.stream()
                         .map(row -> row.entrySet().iterator().next().getValue()).collect(Collectors.toList());
                 changeData.put(propertyName, values);
                 break;
             case NESTED_OBJECT:
-                assertSingletonList(constructedList, propertyName);
-                changeData.put(propertyName, constructedList.isEmpty() ? null : constructedList.get(0));
+                assertSingletonList(dataList, propertyName);
+                changeData.put(propertyName, dataList.isEmpty() ? null : dataList.get(0));
                 break;
             case NESTED_OBJECT_LIST:
-                changeData.put(propertyName, constructedList);
+                changeData.put(propertyName, dataList);
                 break;
         }
         return changeData;

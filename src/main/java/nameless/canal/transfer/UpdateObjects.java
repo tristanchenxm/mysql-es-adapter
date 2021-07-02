@@ -9,9 +9,9 @@ import java.util.List;
 
 @Getter
 public class UpdateObjects {
-    private List<UpdateObject> inserts = new ArrayList<>();
-    private List<UpdateObject> updates = new ArrayList<>();
-    private LinkedHashSet<UpdateObject> deletes = new LinkedHashSet<>();
+    private final List<UpdateObject> inserts = new ArrayList<>();
+    private final List<UpdateObject> updates = new ArrayList<>();
+    private final LinkedHashSet<UpdateObject> deletes = new LinkedHashSet<>();
 
     public void delete(String indexName, String id) {
         delete(new UpdateObject(indexName, id));
@@ -63,7 +63,8 @@ public class UpdateObjects {
 
     }
 
-    private UpdateObject find(String indexName, String id, Collection<UpdateObject>... collections) {
+    @SafeVarargs
+    private final UpdateObject find(String indexName, String id, Collection<UpdateObject>... collections) {
         for (Collection<UpdateObject> collection : collections) {
             for (UpdateObject i : collection) {
                 if (i.getIndexName().equals(indexName) && i.getId().equals(id)) {
@@ -74,4 +75,11 @@ public class UpdateObjects {
         return null;
     }
 
+    public boolean isNotEmpty() {
+        return !inserts.isEmpty() || !updates.isEmpty() || !deletes.isEmpty();
+    }
+
+    public int size() {
+        return inserts.size() + updates.size() + deletes.size();
+    }
 }

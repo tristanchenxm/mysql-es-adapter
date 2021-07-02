@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 import javax.validation.Valid;
+import javax.validation.ValidationException;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
@@ -248,10 +249,15 @@ public class EsMappingProperties {
         @Data
         public static class ConstructedProperty {
             /**
-             * 字段名
+             * 字段名，如果joinType为FLAT_SIMPLE_PROPERTY，可以用逗号分隔多个字段名
              */
             @NotEmpty
             private String name;
+
+            /**
+             * 如果
+             */
+            private String[] propertyNames;
             /**
              * 关联类型，1:1或者1:M
              */
@@ -366,12 +372,35 @@ public class EsMappingProperties {
                 }
             }
 
+            private static final Pattern nameSplitPattern = Pattern.compile("\\s*,\\s*");
+
+            public void setName(String name) {
+                this.name = name;
+                propertyNames = nameSplitPattern.split(name);
+                validateJoinTypeAndPropertyNames();
+            }
+
+            public void setPropertyNames(String[] propertyNames) {
+                this.propertyNames = propertyNames;
+                this.name = String.join(",", propertyNames);
+                validateJoinTypeAndPropertyNames();
+            }
+
+            private void validateJoinTypeAndPropertyNames() {
+                if (joinType == null || joinType == JoinType.FLAT_SIMPLE_PROPERTY
+                        || propertyNames == null || propertyNames.length == 1) {
+                    return;
+                }
+                throw new ValidationException("only join type FLAT_SIMPLE_PROPERTY allows multiple property names");
+            }
+
             public void setReconstructionCondition(ReconstructionCondition reconstructionCondition) {
                 this.reconstructionCondition = reconstructionCondition;
             }
 
             public void setJoinType(@NotNull String joinType) {
                 this.joinType = JoinType.valueOf(joinType);
+                validateJoinTypeAndPropertyNames();
             }
 
             /**

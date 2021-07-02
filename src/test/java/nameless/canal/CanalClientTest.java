@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "OptionalGetWithoutIsPresent"})
 @ActiveProfiles("test")
 @SpringBootTest(classes = Main.class)
 public class CanalClientTest {
@@ -220,15 +220,17 @@ public class CanalClientTest {
             IndexQuery indexQuery = indexQueries.get(i);
             assertInserts(indexQuery, row);
             ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
-                    .stream().filter(p -> p.getName().equals("age")).findFirst().get();
+                    .stream().filter(p -> p.getName().equals("gender,age")).findFirst().get();
             String sql = prop.getSql();
             Map<String, Object> sqlParams = new HashMap<>();
             sqlParams.put("id", Integer.valueOf(row.getAfterColumnValue("id")));
             List<Map<String, Object>> sqlResult = mysqlRepository.fetch(sql, sqlParams);
             if (!sqlResult.isEmpty()) {
                 Integer age = (Integer) sqlResult.get(0).get("age");
+                String gender = (String) sqlResult.get(0).get("gender");
                 Map<String, Object> data = (Map<String, Object>) indexQuery.getObject();
                 Assertions.assertEquals(age, data.get("age"));
+                Assertions.assertEquals(gender, data.get("gender"));
             }
         }
     }
@@ -266,9 +268,11 @@ public class CanalClientTest {
         for (int i = 0; i < deduplicatedRows.size(); i++) {
             RawRow sqlDataRow = deduplicatedRows.get(i);
             UpdateQuery updateQuery = updateQueries.get(i);
-            Assertions.assertEquals(1, updateQuery.getDocument().keySet().size());
+            Assertions.assertEquals(2, updateQuery.getDocument().keySet().size());
             Integer age = (Integer) updateQuery.getDocument().get("age");
             Assertions.assertEquals(sqlDataRow.getAfterColumnValue("age"), age.toString());
+            String gender = (String) updateQuery.getDocument().get("gender");
+            Assertions.assertEquals(sqlDataRow.getAfterColumnValue("gender"), gender);
         }
     }
 

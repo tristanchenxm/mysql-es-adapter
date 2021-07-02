@@ -5,10 +5,11 @@
     "afterColumns": [
       {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
       {"index": 1, "mysqlType": "int", "name": "age", "value": "1"},
+      {"index": 1, "mysqlType": "varchar", "name": "gender", "value": "MALE"},
       {"index": 2, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 00:00:00"},
       {"index": 3, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 00:00:00"}
     ],
-    "sql": "insert into person_info(person_id, age, create_time, update_time) values (1, 1, '2021-01-01 00:00:00', '2021-01-01 00:00:00')"
+    "sql": "insert into person_info(person_id, age, gender, create_time, update_time) values (1, 1, 'MALE', '2021-01-01 00:00:00', '2021-01-01 00:00:00')"
   },
   {
     "table": "person_info",
@@ -16,12 +17,14 @@
     "afterColumns": [
       {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
       {"index": 1, "mysqlType": "int", "name": "age", "value": "2", "updated": true},
+      {"index": 1, "mysqlType": "varchar", "name": "gender", "value": "MALE", "updated": false},
       {"index": 2, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 01:00:00"},
       {"index": 3, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 01:00:00"}
     ],
     "beforeColumns": [
       {"index": 0, "mysqlType": "int", "name": "person_id", "value": "1"},
       {"index": 1, "mysqlType": "int", "name": "age", "value": "1"},
+      {"index": 1, "mysqlType": "varchar", "name": "gender", "value": "MALE"},
       {"index": 2, "mysqlType": "timestamp", "name":  "create_time", "value": "2021-01-01 01:00:00"},
       {"index": 3, "mysqlType": "timestamp", "name":  "update_time", "value": "2021-01-01 01:00:00"}
     ],

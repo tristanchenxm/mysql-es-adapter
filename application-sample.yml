@@ -9,6 +9,7 @@
 # CREATE TABLE person_info(
 #	person_id INT NOT NULL PRIMARY KEY,
 #	age INT NOT NULL,
+#   gender VARCHAR(10) INT NOT NULL,
 #	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
 #	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
 # );
@@ -82,23 +83,31 @@ sync-config:
         - create_time
         - update_time
       constructed-properties: # 由sql构建的字段
-        - name: age # es index field
+        - name: gender,age # es index field, join-type为FLAT_SIMPLE_PROPERTY可以允许多个字段用逗号分隔
           # [FLAT_SIMPLE_PROPERTY|FLAT_LIST|NESTED_OBJECT|NESTED_OBJECT_LIST]，决定构建字段是简单普通字段、简单列表字段，嵌套对象还是嵌套对象列表
           join-type: FLAT_SIMPLE_PROPERTY
           # 主表数据变更时，是否触发关联字段重新构建。多数情况一般是先有主表记录，再插入关联表，所以默认为false
           construct-on-main-table-change: true
           # 构建sql, 动态参数以":column"格式，column必须在simple-properties中。Nullable
           sql: >
-            select age
+            select gender, age
             from person_info
             where person_id=:id
           reconstruction-condition: # 重新构建字段条件
             table: person_info # 发生数据变更的表
             # 哪些列发生变更时触发，逗号分隔，空或者"*"代表任意列
-            on-columns-updated: person_id, age
+            on-columns-updated: person_id, age, gender
+            # 更新数据源[ROW_DATA:RETRIEVE_SQL]
+            # ROW_DATA为直接从binlog的行数据里取列值，由data-columns定义取哪些列值
+            # RETRIEVE_SQL则触发一次sql查询，由retrieve-sql定义取值方式
+            datasource-type: ROW_DATA
+            # data-columns的列顺序请与constructed-properties.name定义的顺序一致
+            data-columns:
+              - gender
+              - age
             # 重新构建sql，动态参数以":column"格式, {column}必须是在{table}中的列名
             retrieve-sql: >
-              select age
+              select gender, age
               from person_info
               where person_id=:person_id
             # 表person_info的哪一列映射到es index ID
