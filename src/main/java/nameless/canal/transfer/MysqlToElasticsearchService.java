@@ -398,7 +398,7 @@ public class MysqlToElasticsearchService {
             constructedList = eventType == EventType.DELETE ?
                     Collections.emptyList() :
                     Collections.singletonList(reconstructionCondition.getDataColumns().stream()
-                            .collect(Collectors.toMap(SimpleProperty::getColumn, prop -> prop.convertType(rowData.get(prop.getColumn())))));
+                            .collect(HashMap::new, (m, prop) -> m.put(prop.getColumn(), prop.convertType(rowData.get(prop.getColumn()))), HashMap::putAll));
         }
         Map<String, Object> changeData = doConstructProperty(constructedPropertyConfig, constructedList);
         Object esIndexId = rowData.get(reconstructionCondition.getIndexId());
