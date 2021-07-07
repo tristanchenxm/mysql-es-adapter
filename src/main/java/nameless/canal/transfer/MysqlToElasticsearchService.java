@@ -13,6 +13,7 @@ import nameless.canal.mysql.MysqlRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,7 +37,7 @@ public class MysqlToElasticsearchService {
         this.esRepository = esRepository;
     }
 
-    public TransferResult loadIndex(String table, String condition) {
+    public TransferResult loadIndex(String table, String condition, int batchSize) {
         if (isReIndexing) {
             return TransferResult.builder().message("please wait until another re-indexing thread is done").build();
         }
@@ -54,7 +55,7 @@ public class MysqlToElasticsearchService {
                     + " where " + idColumn + ">:id"
                     + (StringUtils.isEmpty(condition) ? "" : " and " + condition)
                     + " order by " + idColumn
-                    + " limit 10000";
+                    + " limit " + batchSize;
             HashMap<String, Object> parameters = new HashMap<>();
             String minId = "0";
             List<Map<String, Object>> dataList;
@@ -111,6 +112,10 @@ public class MysqlToElasticsearchService {
                 continue;
             }
             String tableName = entry.getHeader().getTableName();
+            if (isUnrecognizableTable(tableName) || !isRecognizableEventType(eventType)) {
+                continue;
+            }
+
             log.info("binlog[{}:{}], name[{}.{}], eventType: {}",
                     entry.getHeader().getLogfileName(), entry.getHeader().getLogfileOffset(),
                     entry.getHeader().getSchemaName(), tableName,
@@ -131,6 +136,15 @@ public class MysqlToElasticsearchService {
         if (updateObjects.isNotEmpty()) {
             log.info("Total {} insert/update/delete operations done", updateObjects.size());
         }
+    }
+
+    private boolean isRecognizableEventType(EventType eventType) {
+        return eventType == EventType.INSERT || eventType == EventType.UPDATE || eventType == EventType.DELETE;
+    }
+
+    private boolean isUnrecognizableTable(String tableName) {
+        return esMappingProperties.getMappings().get(tableName) == null
+                && CollectionUtils.isEmpty(esMappingProperties.getCascadeEventMapping().get(tableName));
     }
 
     /**
