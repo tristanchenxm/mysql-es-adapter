@@ -1,10 +1,11 @@
 package nameless.canal.config;
 
-import nameless.canal.util.CanalStdDateParser;
 import lombok.AccessLevel;
 import lombok.Data;
-import lombok.Getter;
 import lombok.Setter;
+import nameless.canal.util.NamedParameterUtils;
+import nameless.canal.util.ObjectTypeUtils;
+import nameless.canal.util.ParsedSql;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -13,10 +14,7 @@ import javax.validation.Valid;
 import javax.validation.ValidationException;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
-import java.math.BigDecimal;
-import java.text.ParseException;
 import java.util.*;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -80,37 +78,18 @@ public class EsMappingProperties {
          */
         @Data
         public static class SimpleProperty {
-            private static final CanalStdDateParser stdDateFormat = new CanalStdDateParser();
+            /**
+             * 数据库列名
+             */
             private String column;
+            /**
+             * 别名，作为 es field name
+             */
             private String alias;
             /**
              * 目标类型
              */
             private String targetType;
-            private static final Map<String, String> typeMapping = new HashMap<>();
-
-            static {
-                typeMapping.put("int", "int");
-                typeMapping.put("tinyint", "int");
-                typeMapping.put("smallint", "int");
-                typeMapping.put("mediumint", "int");
-                typeMapping.put("bigint", "long");
-                typeMapping.put("float", "float");
-                typeMapping.put("double", "double");
-                typeMapping.put("decimal", "decimal");
-                typeMapping.put("bit", "int");
-                typeMapping.put("char", "string");
-                typeMapping.put("varchar", "string");
-                typeMapping.put("tinytext", "string");
-                typeMapping.put("text", "string");
-                typeMapping.put("mediumtext", "string");
-                typeMapping.put("longtext", "string");
-                typeMapping.put("datetime", "date");
-                typeMapping.put("timestamp", "date");
-                typeMapping.put("time", "date");
-                typeMapping.put("date", "date");
-                // others do not support yet
-            }
 
             public SimpleProperty(String columnAndTargetType) {
                 String[] cat = columnAndTargetType.split(":");
@@ -120,126 +99,19 @@ public class EsMappingProperties {
                 } else if (cat.length == 3) {
                     alias = cat[2];
                 }
+                if (alias == null) {
+                    alias = column;
+                }
             }
 
-            public Object convertType(String value, String srcType) {
-                return convertType(value, srcType, targetType);
-            }
-
-            public static Object convertFromSqlType(String value, String mysqlType) {
-                mysqlType = mysqlType.toLowerCase();
-                return convertType(value, mysqlType, typeMapping.get(mysqlType));
-            }
-            public static Object convertType(String value, String srcType, String targetType) {
-                if (value == null) {
-                    return null;
-                }
-
-                String cleanSrcType = typeMapping.get(srcType.split("\\(")[0].toLowerCase());
-                if (cleanSrcType == null) {
-                    throw new RuntimeException("Cannot handle srcType " + srcType);
-                }
-                String type = targetType == null ? cleanSrcType : targetType;
-                switch (type) {
-                    case "string":
-                        return value;
-                    case "int":
-                    case "integer":
-                        return Integer.valueOf(value);
-                    case "long":
-                        return Long.valueOf(value);
-                    case "float":
-                        return Float.valueOf(value);
-                    case "double":
-                        return Double.valueOf(value);
-                    case "decimal":
-                        return new BigDecimal(value);
-                    case "boolean":
-                        return value.equals("1") || value.equalsIgnoreCase("true");
-                    case "date":
-                        try {
-                            return stdDateFormat.parse(value);
-                        } catch (ParseException e) {
-                            throw new RuntimeException(e);
-                        }
-                    default:
-                        throw new RuntimeException("Cannot handle srcType=" + srcType + " and targetType=" + targetType);
-                }
+            public Object convertFromType(String value, String srcType) {
+                return ObjectTypeUtils.convertType(value, srcType, targetType);
             }
 
             public Object convertType(Object value) {
-                if (value == null) {
-                    return null;
-                }
-                // 目标类型和原始类型一致，无需转换
-                if (targetType == null) {
-                    return value;
-                }
-                switch (targetType) {
-                    case "string":
-                        return value.toString();
-                    case "int":
-                    case "integer":
-                        if (value instanceof Date) {
-                            return ((Date) value).getTime();
-                        } else if (value instanceof Number) {
-                            return ((Number) value).intValue();
-                        } else {
-                            return Integer.valueOf(value.toString());
-                        }
-                    case "long":
-                        if (value instanceof Date) {
-                            return ((Date) value).getTime();
-                        } else if (value instanceof Number) {
-                            return ((Number) value).longValue();
-                        } else {
-                            return Long.valueOf(value.toString());
-                        }
-                    case "float":
-                        if (value instanceof Date) {
-                            return ((Date) value).getTime();
-                        } else if (value instanceof Number) {
-                            return ((Number) value).floatValue();
-                        } else {
-                            return Float.valueOf(value.toString());
-                        }
-                    case "double":
-                        if (value instanceof Date) {
-                            return ((Date) value).getTime();
-                        } else if (value instanceof Number) {
-                            return ((Number) value).doubleValue();
-                        } else {
-                            return Double.valueOf(value.toString());
-                        }
-                    case "decimal":
-                        if (value instanceof Date) {
-                            return ((Date) value).getTime();
-                        } else {
-                            return new BigDecimal(value.toString());
-                        }
-                    case "boolean":
-                        if (value instanceof Number) {
-                            return ((Number)value).intValue() == 1;
-                        } else {
-                            return value.toString().equalsIgnoreCase("true");
-                        }
-                    case "date":
-                        if (value instanceof Date) {
-                            if (value.getClass() != Date.class) {
-                                return new Date(((Date) value).getTime());
-                            }
-                            return value;
-                        } else {
-                            try {
-                                return stdDateFormat.parse(value.toString());
-                            } catch (ParseException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                    default:
-                        throw new RuntimeException("Cannot convert object type " + value.getClass() + " to targetType=" + targetType);
-                }
+                return ObjectTypeUtils.convertToType(value, targetType);
             }
+
         }
 
         /**
@@ -274,7 +146,6 @@ public class EsMappingProperties {
             /**
              * 重建constructedProperty的触发条件
              */
-            @NotNull
             @Valid
             private ReconstructionCondition reconstructionCondition;
             /**
@@ -322,9 +193,6 @@ public class EsMappingProperties {
                     ROW_DATA
                 }
 
-                @Getter(AccessLevel.NONE)
-                @Setter(AccessLevel.NONE)
-                private final Pattern parameterNamePattern = Pattern.compile(":(\\w+)");
                 @NotEmpty
                 private String table;
                 private DatasourceType datasourceType = DatasourceType.RETRIEVE_SQL;
@@ -347,12 +215,8 @@ public class EsMappingProperties {
 
                 public void setRetrieveSql(String retrieveSql) {
                     this.retrieveSql = retrieveSql;
-                    parameterNames = new HashSet<>();
-                    Matcher m = parameterNamePattern.matcher(retrieveSql);
-                    while (m.find()) {
-                        String parameterName = m.group(1);
-                        parameterNames.add(parameterName);
-                    }
+                    ParsedSql parsedSql = NamedParameterUtils.parseSqlStatement(retrieveSql);
+                    parameterNames = new HashSet<>(parsedSql.getParameterNames());
                 }
 
                 public List<String> getOnColumnsUpdated() {
@@ -403,22 +267,10 @@ public class EsMappingProperties {
                 validateJoinTypeAndPropertyNames();
             }
 
-            /**
-             * non-configurable
-             * 提取sql中动态参数
-             */
-            @Getter(AccessLevel.NONE)
-            @Setter(AccessLevel.NONE)
-            private final Pattern parameterNamePattern = Pattern.compile(":(\\w+)");
-
             public void setSql(String sql) {
                 this.sql = sql;
-                parameterNames = new HashSet<>();
-                Matcher m = parameterNamePattern.matcher(sql);
-                while (m.find()) {
-                    String parameterName = m.group(1);
-                    parameterNames.add(parameterName);
-                }
+                ParsedSql parsedSql = NamedParameterUtils.parseSqlStatement(sql);
+                parameterNames = new HashSet<>(parsedSql.getParameterNames());
             }
         }
     }

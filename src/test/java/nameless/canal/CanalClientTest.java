@@ -4,6 +4,7 @@ import com.alibaba.otter.canal.protocol.CanalEntry;
 import com.alibaba.otter.canal.protocol.CanalEntry.Entry;
 import com.alibaba.otter.canal.protocol.CanalEntry.EventType;
 import com.alibaba.otter.canal.protocol.CanalEntry.RowChange;
+import nameless.canal.util.JsonUtil;
 import nameless.canal.client.CanalClient;
 import nameless.canal.client.ConfiguredCanalConnector;
 import nameless.canal.config.EsMappingProperties;
@@ -220,17 +221,19 @@ public class CanalClientTest {
             IndexQuery indexQuery = indexQueries.get(i);
             assertInserts(indexQuery, row);
             ConstructedProperty prop = esMappingProperties.getMappings().get("person").getConstructedProperties()
-                    .stream().filter(p -> p.getName().equals("gender,age")).findFirst().get();
+                    .stream().filter(p -> p.getName().equals("sex,age,test_json")).findFirst().get();
             String sql = prop.getSql();
             Map<String, Object> sqlParams = new HashMap<>();
             sqlParams.put("id", Integer.valueOf(row.getAfterColumnValue("id")));
             List<Map<String, Object>> sqlResult = mysqlRepository.fetch(sql, sqlParams);
             if (!sqlResult.isEmpty()) {
                 Integer age = (Integer) sqlResult.get(0).get("age");
-                String gender = (String) sqlResult.get(0).get("gender");
+                String gender = (String) sqlResult.get(0).get("sex");
+                String testJsonString = (String) sqlResult.get(0).get("test_json");
                 Map<String, Object> data = (Map<String, Object>) indexQuery.getObject();
                 Assertions.assertEquals(age, data.get("age"));
-                Assertions.assertEquals(gender, data.get("gender"));
+                Assertions.assertEquals(gender, data.get("sex"));
+                Assertions.assertEquals(testJsonString, JsonUtil.toString(data.get("test_json")));
             }
         }
     }
@@ -268,11 +271,13 @@ public class CanalClientTest {
         for (int i = 0; i < deduplicatedRows.size(); i++) {
             RawRow sqlDataRow = deduplicatedRows.get(i);
             UpdateQuery updateQuery = updateQueries.get(i);
-            Assertions.assertEquals(2, updateQuery.getDocument().keySet().size());
+            Assertions.assertEquals(3, updateQuery.getDocument().keySet().size());
             Integer age = (Integer) updateQuery.getDocument().get("age");
             Assertions.assertEquals(sqlDataRow.getAfterColumnValue("age"), age.toString());
-            String gender = (String) updateQuery.getDocument().get("gender");
+            String gender = (String) updateQuery.getDocument().get("sex");
             Assertions.assertEquals(sqlDataRow.getAfterColumnValue("gender"), gender);
+            Map<String, String> testJson = (Map<String, String>) updateQuery.getDocument().get("test_json");
+            Assertions.assertEquals(sqlDataRow.getAfterColumnValue("test_json"), JsonUtil.toString(testJson));
         }
     }
 
@@ -415,7 +420,7 @@ public class CanalClientTest {
             Map<String, Object> esUpdateFields = (Map<String, Object>) updateQuery.getDocument().get("job");
             jobFields.forEach(jobField -> {
                 RawColumn column = sqlDataRow.getAfterColumn(jobField.getColumn());
-                Assertions.assertEquals(esUpdateFields.get(jobField.getColumn()), jobField.convertType(column.getValue(), column.getMysqlType()));
+                Assertions.assertEquals(esUpdateFields.get(jobField.getColumn()), jobField.convertFromType(column.getValue(), column.getMysqlType()));
             });
         }
     }
@@ -448,7 +453,8 @@ public class CanalClientTest {
         Assertions.assertNotNull(esUpdateFields1);
         jobFields.forEach(jobField -> {
             RawColumn column = row.getAfterColumn(jobField.getColumn());
-            Assertions.assertEquals(esUpdateFields1.get(jobField.getColumn()), jobField.convertType(column.getValue(), column.getMysqlType()));
+            Assertions.assertEquals(esUpdateFields1.get(jobField.getColumn()), jobField.convertFromType(column.getValue(), column.getMysqlType()));
         });
     }
 }
+

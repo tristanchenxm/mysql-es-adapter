@@ -12,7 +12,8 @@ CREATE TABLE person_info
     age         INT NOT NULL,
     gender      VARCHAR(10) NOT NULL,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+    test_json text
 );
 
 CREATE TABLE person_job
@@ -30,6 +31,7 @@ CREATE TABLE `event`
     event_name  VARCHAR(128) NOT NULL,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+    test_json text,
     KEY (person_id)
 );
 

@@ -10,6 +10,7 @@ import nameless.canal.config.EsMappingProperties.Mapping.ConstructedProperty.Rec
 import nameless.canal.config.EsMappingProperties.Mapping.SimpleProperty;
 import nameless.canal.es.EsRepository;
 import nameless.canal.mysql.MysqlRepository;
+import nameless.canal.util.ObjectTypeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -217,7 +218,7 @@ public class MysqlToElasticsearchService {
             if (columnName.equalsIgnoreCase(mapping.getId())) {
                 o.setId(value);
             } else if (simpleProperty != null) {
-                o.put(columnName, simpleProperty.convertType(value, c.getMysqlType()), c.getUpdated());
+                o.put(simpleProperty.getAlias(), simpleProperty.convertFromType(value, c.getMysqlType()), c.getUpdated());
             }
         }
         return o;
@@ -250,7 +251,6 @@ public class MysqlToElasticsearchService {
 
     /**
      * 处理关联表数据变更，重新构建关联属性并保存变更到elasticsearch
-     *
      */
     private void ifReconstructedPropertiesChanged(String tableName, EventType eventType,
                                                   RowData rowData, UpdateObjects updateObjects) {
@@ -336,7 +336,7 @@ public class MysqlToElasticsearchService {
         for (CanalEntry.Column c : columns) {
             String columnName = c.getName();
             String value = c.getIsNull() ? null : c.getValue();
-            result.put(columnName, SimpleProperty.convertFromSqlType(value, c.getMysqlType()));
+            result.put(columnName, ObjectTypeUtils.convertFromSqlType(value, c.getMysqlType()));
         }
         return result;
     }
@@ -406,13 +406,16 @@ public class MysqlToElasticsearchService {
         ReconstructionCondition reconstructionCondition = constructedPropertyConfig.getReconstructionCondition();
         List<Map<String, Object>> constructedList;
         if (reconstructionCondition.getDatasourceType() == ReconstructionCondition.DatasourceType.RETRIEVE_SQL) {
+            // 通过SQL组装property数据
             Map<String, ?> parameters = reconstructionCondition.getParameterNames().stream().collect(Collectors.toMap(p -> p, rowData::get));
             constructedList = mysqlRepository.fetch(reconstructionCondition.getRetrieveSql(), parameters);
         } else {
+            // 直接用 binlog row data
             constructedList = eventType == EventType.DELETE ?
                     Collections.emptyList() :
                     Collections.singletonList(reconstructionCondition.getDataColumns().stream()
-                            .collect(HashMap::new, (m, prop) -> m.put(prop.getColumn(), prop.convertType(rowData.get(prop.getColumn()))), HashMap::putAll));
+                            .collect(HashMap::new, (m, prop) -> m.put(prop.getAlias(), prop.convertType(rowData.get(prop.getColumn()))), HashMap::putAll));
+            ;
         }
         Map<String, Object> changeData = doConstructProperty(constructedPropertyConfig, constructedList);
         Object esIndexId = rowData.get(reconstructionCondition.getIndexId());
