@@ -51,7 +51,7 @@ public class CanalClient {
 
     public void handleEntries(List<Entry> entries) {
         long delay = INITIAL_DELAY_ON_ERROR;
-        while (keepRunning) {
+        do {
             try {
                 mysqlToElasticsearchService.handleRowChanges(entries);
                 connector.ack();
@@ -61,7 +61,7 @@ public class CanalClient {
                 sleep(delay);
                 delay = delay > MAX_DELAY_INTERVAL ? delay : delay * 2;
             }
-        }
+        } while (keepRunning);
     }
 
     private void sleep(long milliseconds) {
