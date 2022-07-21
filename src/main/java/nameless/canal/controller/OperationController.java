@@ -28,12 +28,16 @@ public class OperationController {
         @Min(1)
         @Max(10000)
         private int batchSize = 1000;
+        /**
+         * 导入完成后是否立即 refresh es
+         */
+        private boolean refreshAfterDone;
     }
 
     @PostMapping("/load/{table}")
     public TransferResult loadIndex(@PathVariable String table,
                                     @Validated @RequestBody QueryCondition condition) {
-        return mysqlToElasticsearchService.loadIndex(table, condition.condition, condition.batchSize);
+        return mysqlToElasticsearchService.loadIndex(table, condition.condition, condition.batchSize, condition.refreshAfterDone);
     }
 
 }

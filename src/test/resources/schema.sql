@@ -2,6 +2,7 @@ CREATE TABLE person
 (
     id          INT PRIMARY KEY,
     `name`      VARCHAR(100) NOT NULL,
+    birth_place_id INT NOT NULL,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
 );
@@ -43,4 +44,9 @@ CREATE TABLE relative
     relation    VARCHAR(32) NOT NULL,
     KEY (person_id_1),
     KEY (person_id_2)
+);
+
+CREATE TABLE birth_place(
+  id INT PRIMARY KEY,
+  name varchar(100) NOT NULL
 );

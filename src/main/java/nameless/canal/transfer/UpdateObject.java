@@ -3,15 +3,15 @@ package nameless.canal.transfer;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.util.LinkedCaseInsensitiveMap;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 @Getter
 @Setter
-public class UpdateObject extends HashMap<String, Object> {
+public class UpdateObject extends LinkedCaseInsensitiveMap<Object> {
 
     private static final long serialVersionUID = 2168632330936708372L;
 
@@ -23,8 +23,14 @@ public class UpdateObject extends HashMap<String, Object> {
     @Setter(AccessLevel.NONE)
     private Set<String> unChangedColumns = new HashSet<>();
 
-    public UpdateObject() {
+    /**
+     * columns in this UpdateObject that is not in the ES mapping
+     */
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Set<String> unMappedColumns = new HashSet<>();
 
+    public UpdateObject() {
     }
 
     public UpdateObject(String indexName, String id) {
@@ -63,6 +69,18 @@ public class UpdateObject extends HashMap<String, Object> {
         return put(key, value);
     }
 
+    public Object putUnmapped(String key, Object value) {
+        unMappedColumns.add(key);
+        return put(key, value);
+    }
+
+    public void removedUnmapped() {
+        for (String unmappedColumn : unMappedColumns) {
+            this.remove(unmappedColumn);
+        }
+        unMappedColumns.clear();
+    }
+
     @Setter(AccessLevel.NONE)
     @Getter(AccessLevel.NONE)
     private final Set<String> propertiesHaveSet = new HashSet<>();
@@ -96,4 +114,5 @@ public class UpdateObject extends HashMap<String, Object> {
     public boolean hasAnyChange() {
         return unChangedColumns.size() < size();
     }
+
 }

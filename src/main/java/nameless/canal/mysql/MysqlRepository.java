@@ -1,5 +1,7 @@
 package nameless.canal.mysql;
 
+import nameless.canal.config.EsMappingProperties;
+import nameless.canal.transfer.CasePreDefinedColumnMapRowMapper;
 import nameless.canal.util.ObjectTypeUtils;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -12,16 +14,17 @@ import java.util.Map;
 @Repository
 public class MysqlRepository {
     private static final String typeConvertMark = ":";
-
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final EsMappingProperties esMappingProperties;
 
-    public MysqlRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+    public MysqlRepository(NamedParameterJdbcTemplate jdbcTemplate, EsMappingProperties esMappingProperties) {
         this.jdbcTemplate = jdbcTemplate;
+        this.esMappingProperties = esMappingProperties;
     }
 
     public List<Map<String, Object>> fetch(String sql, Map<String, ?> parameters) {
         MapSqlParameterSource parameterSource = new MapSqlParameterSource(parameters);
-        List<Map<String, Object>> result = jdbcTemplate.queryForList(sql, parameterSource);
+        List<Map<String, Object>> result = jdbcTemplate.query(sql, parameterSource, new CasePreDefinedColumnMapRowMapper(esMappingProperties.getPropertyCaseType()));
         doTypeConvert(result);
         return result;
     }
@@ -53,5 +56,4 @@ public class MysqlRepository {
             }
         }
     }
-
 }

@@ -123,11 +123,13 @@ public class CanalClientTest {
     @Test
     public void testHandleEntries_personOnly() throws Exception {
         reset(operations);
+        executeBirthPlaceSql("test_data_birth_place_insert_1.json");
         List<RawRow> rows = readList("test_data_person_1.json");
         Map<EventType, List<RawRow>> grouping = rows.stream().collect(Collectors.groupingBy(RawRow::getEventType));
         testInsertPerson(grouping.get(EventType.INSERT));
         testUpdatePerson(grouping.get(EventType.UPDATE));
         testDeletePerson(grouping.get(EventType.DELETE));
+        testUpdateBirthPlaceName();
     }
 
     private void testInsertPerson(List<RawRow> inserts) {
@@ -148,8 +150,14 @@ public class CanalClientTest {
         insertedColumns.forEach(column -> {
             if (column.getName().equals("id")) {
                 Assertions.assertEquals(indexQuery.getId(), column.getValue());
+            } else if (column.getName().equals("birth_place_id")) {
+                Assertions.assertNull(data.get(column.getName()));
+                Assertions.assertNotNull(column.getValue());
+                Assertions.assertNotNull(data.get("birth_place"));
+                Assertions.assertNotNull(((Map)data.get("birth_place")).get("name"));
             } else if (!column.getMysqlType().equals("timestamp")) {
-                Assertions.assertEquals(data.get(column.getName()), column.getValue());
+                Object indexObject = data.get(column.getName());
+                Assertions.assertEquals(indexObject == null ? null : indexObject.toString(), column.getValue());
             } else {
                 Assertions.assertEquals(dateFormat.format((Date) data.get(column.getName())), column.getValue());
             }
@@ -195,6 +203,22 @@ public class CanalClientTest {
         }
     }
 
+    private void testUpdateBirthPlaceName() throws Exception {
+        reset(operations);
+        List<RawRow> updates = executeBirthPlaceSql("test_data_birth_place_update_1.json");
+        ArgumentCaptor<List<IndexQuery>> indexQueryCapture = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UpdateQuery>> updateQueryCapture = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
+        canalClient.handleEntries(getEntries(updates));
+        verify(operations, times(0))
+                .bulkIndex(indexQueryCapture.capture(), indexCoordinatesCaptor.capture());
+
+        verify(operations, times(1)).bulkUpdate(updateQueryCapture.capture(), indexCoordinatesCaptor.capture());
+        Long personCount = (Long)mysqlRepository.fetch("select count(*) as c from person", Collections.emptyMap()).get(0).get("c");
+        List<?> updateIndices = updateQueryCapture.getAllValues().get(0);
+        Assertions.assertEquals(personCount.longValue(), updateIndices.size());
+    }
+
     @Test
     public void testHandleEntries_personInfo_1() throws Exception {
         reset(operations);
@@ -202,6 +226,7 @@ public class CanalClientTest {
         ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
+        executeBirthPlaceSql("test_data_birth_place_insert_1.json");
         List<RawRow> personRows = readList("test_data_person_1.json");
         List<RawRow> insertPersonRows = personRows.stream().filter(row -> row.getEventType() == EventType.INSERT).collect(Collectors.toList());
         List<Entry> insertPersonEntries = getEntries(insertPersonRows);
@@ -289,6 +314,7 @@ public class CanalClientTest {
         ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
+        executeBirthPlaceSql("test_data_birth_place_insert_1.json");
         List<RawRow> personRows = readList("test_data_person_1.json");
         List<RawRow> insertPersonRows = personRows.stream().filter(row -> row.getEventType() == EventType.INSERT).collect(Collectors.toList());
         List<Entry> insertPersonEntries = getEntries(insertPersonRows);
@@ -359,6 +385,7 @@ public class CanalClientTest {
         ArgumentCaptor<List<UpdateQuery>> updateQueryCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<IndexCoordinates> indexCoordinatesCaptor = ArgumentCaptor.forClass(IndexCoordinates.class);
 
+        executeBirthPlaceSql("test_data_birth_place_insert_1.json");
         List<RawRow> personRows = readList("test_data_person_1.json");
         List<RawRow> insertPersonRows = personRows.stream().filter(row -> row.getEventType() == EventType.INSERT).collect(Collectors.toList());
         List<Entry> insertPersonEntries = getEntries(insertPersonRows);
@@ -456,5 +483,12 @@ public class CanalClientTest {
             Assertions.assertEquals(esUpdateFields1.get(jobField.getColumn()), jobField.convertFromType(column.getValue(), column.getMysqlType()));
         });
     }
+
+    private List<RawRow> executeBirthPlaceSql(String jsonFileName) throws Exception {
+        List<RawRow> rows = readList(jsonFileName);
+        rows.forEach(row -> executeSql(row.getSql()));
+        return rows;
+    }
+
 }
 

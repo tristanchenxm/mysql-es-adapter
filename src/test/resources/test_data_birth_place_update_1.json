@@ -1,0 +1,15 @@
+[
+  {
+    "table": "birth_place",
+    "eventType": "UPDATE",
+    "beforeColumns": [
+      {"index": 0, "mysqlType": "int", "name": "id", "value": "1"},
+      {"index": 1, "mysqlType": "varchar", "name": "name", "value": "birth-place-1-v1"}
+    ],
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "id", "value": "1"},
+      {"index": 1, "mysqlType": "varchar", "name": "name", "value": "birth-place-1-v2"}
+    ],
+    "sql": "update birth_place set name='birth-place-1-v2' where id=1"
+  }
+  ]

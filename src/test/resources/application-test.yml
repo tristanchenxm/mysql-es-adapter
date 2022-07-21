@@ -1,3 +1,50 @@
+# -- BEGIN TABLE SCHEMA
+# CREATE TABLE person (
+#	id INT PRIMARY KEY,
+#	`name` VARCHAR(100) NOT NULL,
+#   birth_place_id INT NOT NULL,
+#	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+#	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
+# );
+#
+# CREATE TABLE person_info(
+#	person_id INT NOT NULL PRIMARY KEY,
+#	age INT NOT NULL,
+#	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+#	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
+# );
+#
+# CREATE TABLE person_job(
+#	person_id INT NOT NULL PRIMARY KEY,
+#	employer VARCHAR(255),
+#	job_title VARCHAR(100),
+#	salary DECIMAL(10,2)
+# );
+#
+# CREATE TABLE `event` (
+#	id INT PRIMARY KEY,
+#	person_id INT NOT NULL,
+#	event_name VARCHAR(128) NOT NULL,
+#	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+#	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+#	KEY (person_id)
+# );
+#
+# CREATE TABLE relative(
+#	id INT PRIMARY KEY,
+#	person_id_1 INT NOT NULL,
+#	person_id_2 INT NOT NULL,
+#	relation VARCHAR(32) NOT NULL
+#	KEY (person_id_1),
+#	KEY (person_id_2)
+# );
+# CREATE TABLE birth_place(
+#   id INT PRIMARY KEY,
+#   name VARCHAR(100) NOT NULL
+# );
+#
+# -- END TABLE SCHEMA
+
 spring:
   datasource:
     driver-class-name: org.h2.Driver
@@ -11,7 +58,7 @@ canal:
   # [DIRECT_CLIENT:KAFKA_CLIENT]，以下direct-client或者kafka-client二选一配置即可
   client-type: DIRECT_CLIENT
   direct-client:
-    host: 127.0.0.1
+    host: 192.168.133.63
     username:
     password:
     subscribe: elasticsearch_test\..*
@@ -127,3 +174,21 @@ sync-config:
               from person_job
               where person_id=:person_id
             index-id: person_id
+        - name: birth_place
+          join_type: NESTED_OBJECT
+          construct-on-main-table-change: true
+          sql: >
+            select id, name
+            from birth_place
+            where id=:birth_place_id
+      multiple-documents-update-events:
+        - on-table: birth_place
+          on-columns:
+            - id
+            - name
+          retrieve-index-id-and-foreign-key-sql: >
+            select id, birth_place_id
+            from person p
+            where birth_place_id=:id
+          update-properties:
+            - birth_place

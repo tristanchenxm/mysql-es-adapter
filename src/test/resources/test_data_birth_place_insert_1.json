@@ -1,0 +1,11 @@
+[
+  {
+    "table": "birth_place",
+    "eventType": "INSERT",
+    "afterColumns": [
+      {"index": 0, "mysqlType": "int", "name": "id", "value": "1"},
+      {"index": 1, "mysqlType": "varchar", "name": "name", "value": "birth-place-1-v1"}
+    ],
+    "sql": "insert into birth_place(id, name) values (1, 'birth-place-1-v1')"
+  }
+  ]

@@ -2,7 +2,7 @@ package nameless.canal.transfer;
 
 import com.alibaba.otter.canal.protocol.CanalEntry;
 import com.alibaba.otter.canal.protocol.CanalEntry.*;
-import nameless.canal.util.JsonUtil;
+import lombok.extern.slf4j.Slf4j;
 import nameless.canal.config.EsMappingProperties;
 import nameless.canal.config.EsMappingProperties.Mapping;
 import nameless.canal.config.EsMappingProperties.Mapping.ConstructedProperty;
@@ -10,13 +10,14 @@ import nameless.canal.config.EsMappingProperties.Mapping.ConstructedProperty.Rec
 import nameless.canal.config.EsMappingProperties.Mapping.SimpleProperty;
 import nameless.canal.es.EsRepository;
 import nameless.canal.mysql.MysqlRepository;
+import nameless.canal.util.JsonUtil;
 import nameless.canal.util.ObjectTypeUtils;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -38,10 +39,7 @@ public class MysqlToElasticsearchService {
         this.esRepository = esRepository;
     }
 
-    public TransferResult loadIndex(String table, String condition, int batchSize) {
-        if (isReIndexing) {
-            return TransferResult.builder().message("please wait until another re-indexing thread is done").build();
-        }
+    public synchronized TransferResult loadIndex(String table, String condition, int batchSize, boolean refreshAfterDone) {
         Mapping mapping = esMappingProperties.getMappings().get(table);
         if (mapping == null) {
             return TransferResult.builder().message(String.format("table %s not configured", table)).build();
@@ -57,7 +55,7 @@ public class MysqlToElasticsearchService {
                     + (StringUtils.isEmpty(condition) ? "" : " and " + condition)
                     + " order by " + idColumn
                     + " limit " + batchSize;
-            HashMap<String, Object> parameters = new HashMap<>();
+            Map<String, Object> parameters = new HashMap<>();
             String minId = "0";
             List<Map<String, Object>> dataList;
             do {
@@ -69,7 +67,7 @@ public class MysqlToElasticsearchService {
                                 String id = data.get(idColumn).toString();
                                 data.remove(idColumn);
                                 UpdateObject indexObject = new UpdateObject(mapping.getEsIndex(), id, data);
-                                processConstructedPropertiesOnMainTableChanged(indexObject, mapping, true);
+                                processConstructedPropertiesOnMainTableChanged(indexObject, mapping, null,true);
                                 // 类型转换
                                 indexObject.entrySet().forEach(entry -> {
                                     SimpleProperty configuredProperty = mapping.getSimplePropertyMap().get(entry.getKey());
@@ -77,6 +75,7 @@ public class MysqlToElasticsearchService {
                                         entry.setValue(configuredProperty.convertType(entry.getValue()));
                                     }
                                 });
+                                indexObject.removedUnmapped();
                                 return indexObject;
                             }
                     ).collect(Collectors.toList());
@@ -85,6 +84,9 @@ public class MysqlToElasticsearchService {
                 totalIndexed += dataList.size();
             } while (!dataList.isEmpty());
             log.info("load data into elasticsearch for table {} done. total {} rows indexed. the last index id is {}", table, totalIndexed, minId);
+            if (refreshAfterDone) {
+                esRepository.refresh(mapping.getEsIndex());
+            }
             return TransferResult.builder().rowsProcessed(totalIndexed).message("DONE").build();
         } catch (Exception e) {
             log.error("an exception occurred when loading table " + table, e);
@@ -124,13 +126,16 @@ public class MysqlToElasticsearchService {
             for (RowData rowData : rowChange.getRowDatasList()) {
                 ifSimplePropertiesChanged(tableName, eventType, rowData, updateObjects);
                 ifReconstructedPropertiesChanged(tableName, eventType, rowData, updateObjects);
+                ifMultipleDocumentsUpdateRequired(tableName, eventType, rowData, updateObjects);
             }
         }
 
         updateObjects.getDeletes().forEach(deleteObject -> esRepository.deleteById(deleteObject.getIndexName(), deleteObject.getId()));
+        updateObjects.getInserts().forEach(UpdateObject::removedUnmapped);
         updateObjects.getInserts().stream()
                 .collect(Collectors.groupingBy(UpdateObject::getIndexName))
                 .forEach(esRepository::bulkInsert);
+        updateObjects.getUpdates().forEach(UpdateObject::removedUnmapped);
         updateObjects.getUpdates().stream()
                 .collect(Collectors.groupingBy(UpdateObject::getIndexName))
                 .forEach(esRepository::bulkUpdate);
@@ -145,7 +150,8 @@ public class MysqlToElasticsearchService {
 
     private boolean isUnrecognizableTable(String tableName) {
         return esMappingProperties.getMappings().get(tableName) == null
-                && CollectionUtils.isEmpty(esMappingProperties.getCascadeEventMapping().get(tableName));
+                && CollectionUtils.isEmpty(esMappingProperties.getSingleReconstructEventMapping().get(tableName))
+                && CollectionUtils.isEmpty(esMappingProperties.getBatchReconstructEventMapping().get(tableName));
     }
 
     /**
@@ -173,7 +179,7 @@ public class MysqlToElasticsearchService {
 
     private void tryInsert(RowData rowData, Mapping mapping, UpdateObjects updateObjects) {
         UpdateObject insert = getUpdateObject(rowData.getAfterColumnsList(), mapping);
-        processConstructedPropertiesOnMainTableChanged(insert, mapping, false);
+        processConstructedPropertiesOnMainTableChanged(insert, mapping, null,false);
         log.info("index {}.{} to insert", insert.getIndexName(), insert.getId());
         updateObjects.insert(insert);
     }
@@ -188,7 +194,7 @@ public class MysqlToElasticsearchService {
         Object afterId = after.getId();
         if (before.getId().equals(after.getId())) {
             if (after.hasAnyChange()) {
-                processConstructedPropertiesOnMainTableChanged(after, mapping, false);
+                processConstructedPropertiesOnMainTableChanged(after, mapping, null, false);
                 if (updateObjects.isInInsertBuffer(after) || esRepository.exists(esIndex, beforeId)) {
                     updateObjects.update(after.changedOnlyObject());
                 } else {
@@ -197,7 +203,7 @@ public class MysqlToElasticsearchService {
             }
         } else { // ID被UPDATE
             log.info("index {} id changed from {} to {}, delete {} and insert {}", esIndex, beforeId, afterId, beforeId, afterId);
-            processConstructedPropertiesOnMainTableChanged(after, mapping, false);
+            processConstructedPropertiesOnMainTableChanged(after, mapping, null, false);
             updateObjects.insert(after);
             updateObjects.delete(before);
         }
@@ -219,22 +225,30 @@ public class MysqlToElasticsearchService {
                 o.setId(value);
             } else if (simpleProperty != null) {
                 o.put(simpleProperty.getAlias(), simpleProperty.convertFromType(value, c.getMysqlType()), c.getUpdated());
+            } else {
+                // for those columns were not mapped in simpleProperties, put it into updatedObject temporary but marked as unchanged
+                // will be removed before updating ES index
+                o.putUnmapped(columnName, ObjectTypeUtils.convertFromSqlType(value, c.getMysqlType()));
             }
         }
         return o;
     }
 
     /**
+     * @param targetPropertyName if targetPropertyName is not null, then only load the specific one, else load all
      * @param constructionGuaranteed 是否忽略constructOnMainTableChange, 一定构建关联属性。发生在数据一次性导入时
      *                               主表信息变更时，构建关联属性
      */
-    private void processConstructedPropertiesOnMainTableChanged(UpdateObject data, Mapping mapping, boolean constructionGuaranteed) {
+    private void processConstructedPropertiesOnMainTableChanged(UpdateObject data, Mapping mapping, String targetPropertyName, boolean constructionGuaranteed) {
         List<ConstructedProperty> constructedProperties = mapping.getConstructedProperties();
         if (constructedProperties == null) {
             return;
         }
         for (ConstructedProperty constructedProperty : constructedProperties) {
             if (!constructionGuaranteed && !constructedProperty.isConstructOnMainTableChange()) {
+                continue;
+            }
+            if (targetPropertyName != null && !targetPropertyName.equals(constructedProperty.getName())) {
                 continue;
             }
             String sql = constructedProperty.getSql();
@@ -254,7 +268,7 @@ public class MysqlToElasticsearchService {
      */
     private void ifReconstructedPropertiesChanged(String tableName, EventType eventType,
                                                   RowData rowData, UpdateObjects updateObjects) {
-        List<Mapping> mappings = esMappingProperties.getCascadeEventMapping().get(tableName);
+        List<Mapping> mappings = esMappingProperties.getSingleReconstructEventMapping().get(tableName);
         if (mappings == null) {
             return;
         }
@@ -415,7 +429,6 @@ public class MysqlToElasticsearchService {
                     Collections.emptyList() :
                     Collections.singletonList(reconstructionCondition.getDataColumns().stream()
                             .collect(HashMap::new, (m, prop) -> m.put(prop.getAlias(), prop.convertType(rowData.get(prop.getColumn()))), HashMap::putAll));
-            ;
         }
         Map<String, Object> changeData = doConstructProperty(constructedPropertyConfig, constructedList);
         Object esIndexId = rowData.get(reconstructionCondition.getIndexId());
@@ -429,4 +442,50 @@ public class MysqlToElasticsearchService {
             updateObjects.update(update);
         }
     }
+
+    /**
+     * if the event triggers updates on multiple documents
+     * table structures should follow database normalizations. that is the foreign key (physical or logical) should be updated/removed
+     * before the referenced table rows inserted/deleted
+     */
+    private void ifMultipleDocumentsUpdateRequired(String tableName, EventType eventType, RowData rowData, UpdateObjects updateObjects) {
+        if (eventType != EventType.UPDATE) {
+            // we assume table structures follow database normalizations.
+            return;
+        }
+        List<Mapping> mappings = esMappingProperties.getBatchReconstructEventMapping().get(tableName);
+        if (mappings == null) {
+            return;
+        }
+
+        for (Mapping mapping : mappings) {
+            Mapping.MultipleDocumentUpdateEvent event = mapping.getMultipleDocumentsUpdateEvents().stream().filter(e -> e.getOnTable().equalsIgnoreCase(tableName)).findAny().orElse(null);
+            if (event == null) {
+                continue;
+            }
+            Map<String, Object> before = getDataMap(rowData.getBeforeColumnsList());
+            Map<String, Object> after = getDataMap(rowData.getAfterColumnsList());
+            if (isMonitoringColumnsChanged(before, after, event.getOnColumns())) {
+                Map<String, ?> parameters = event.getParameterNames().stream().collect(Collectors.toMap(Function.identity(), after::get));
+                List<Map<String, Object>> indexDatas = mysqlRepository.fetch(event.getRetrieveIndexIdAndForeignKeySql(), parameters);
+                log.info("{} {} documents related to {}.{}", indexDatas.size(), mapping.getEsIndex(), tableName, JsonUtil.toString(parameters));
+                mapping.getConstructedProperties().forEach(constructedProperty -> {
+                    if (event.getUpdateProperties().contains(constructedProperty.getName())) {
+                        indexDatas.forEach(indexData -> {
+                            UpdateObject updateObject = new UpdateObject(mapping.getEsIndex(), indexData.get(mapping.getId()).toString());
+                            indexData.forEach((columnName, value) -> {
+                                if (!columnName.equalsIgnoreCase(mapping.getId())) {
+                                    updateObject.putUnmapped(columnName, value);
+                                }
+                            });
+                            processConstructedPropertiesOnMainTableChanged(updateObject, mapping, constructedProperty.getName(),true);
+                            updateObject.removedUnmapped();
+                            updateObjects.update(updateObject);
+                        });
+                    }
+                });
+            }
+        }
+    }
+
 }

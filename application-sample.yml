@@ -2,6 +2,7 @@
 # CREATE TABLE person (
 #	id INT PRIMARY KEY,
 #	`name` VARCHAR(100) NOT NULL,
+#   `birth_place_id` INT NOT NULL,
 #	create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
 #	update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP()
 # );
@@ -38,17 +39,23 @@
 #	KEY (person_id_1),
 #	KEY (person_id_2)
 # );
+
+# CREATE TABLE birth_place(
+#   id INT PRIMARY KEY,
+#   name VARCHAR(100) NOT NULL
+# );
+#
 # -- END TABLE SCHEMA
 
 spring:
   elasticsearch:
     rest:
       uris:
-        - 127.0.0.1:9200
+        - 192.168.133.63:9200
       #connectionTimeout: 60000
   datasource:
     initialization-mode: never
-    url: jdbc:mysql://127.0.0.1:3306/elasticsearch_test?useLegacyDatetimeCode=false&useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&connectTimeout=2000&sessionVariables=character_set_connection=utf8mb4,character_set_client=utf8mb4
+    url: jdbc:mysql://192.168.133.63:3306/elasticsearch_test?useLegacyDatetimeCode=false&useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&connectTimeout=2000&sessionVariables=character_set_connection=utf8mb4,character_set_client=utf8mb4
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password:
@@ -57,7 +64,7 @@ canal:
   # [DIRECT_CLIENT:KAFKA_CLIENT]，以下direct-client或者kafak-client二选一配置即可
   client-type: DIRECT_CLIENT
   direct-client:
-    host: 127.0.0.1
+    host: 192.168.133.63
     port: 11111
     username:
     password:
@@ -167,3 +174,21 @@ sync-config:
               from person_job
               where person_id=:person_id
             index-id: person_id
+        - name: birth_place
+          join_type: NESTED_OBJECT
+          construct-on-main-table-change: true
+          sql: >
+            select id, name
+            from birth_place
+            where id=:birth_place_id
+      multiple-documents-update-events:
+        - on-table: birth_place
+          on-columns:
+            - id
+            - name
+          retrieve-index-id-and-foreign-key-sql: >
+            select distinct id, birth_place_id
+            from person p
+            where birth_place_id=:id
+          update-properties:
+            - birth_place

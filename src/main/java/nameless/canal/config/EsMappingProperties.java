@@ -3,6 +3,7 @@ package nameless.canal.config;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Setter;
+import nameless.canal.transfer.PropertyCaseType;
 import nameless.canal.util.NamedParameterUtils;
 import nameless.canal.util.ObjectTypeUtils;
 import nameless.canal.util.ParsedSql;
@@ -22,12 +23,23 @@ import java.util.stream.Collectors;
 @ConfigurationProperties(prefix = "sync-config")
 @Data
 public class EsMappingProperties {
+    /**
+     * ES properties的大小写，UPPER_CASE 大写，LOWER_CASE 小写, AS_IS jdbc返回什么就用什么
+     */
+    private PropertyCaseType propertyCaseType = PropertyCaseType.LOWER_CASE;
+
     private Map<String, Mapping> mappings;
     /**
      * 联动表mapping, 当关联表发生变化时，需要重建constructedProperties
      */
     @Setter(AccessLevel.NONE)
-    private Map<String, List<Mapping>> cascadeEventMapping = new HashMap<>();
+    private Map<String, List<Mapping>> singleReconstructEventMapping = new HashMap<>();
+
+    /**
+     * mysql change that will trigger updates on multiple documents
+     */
+    @Setter(AccessLevel.NONE)
+    private Map<String, List<Mapping>> batchReconstructEventMapping = new HashMap<>();
 
     public void setMappings(@NotEmpty List<Mapping> mappings) {
         if (mappings == null) {
@@ -41,9 +53,16 @@ public class EsMappingProperties {
                 for (Mapping.ConstructedProperty constructedProperty : constructedProperties) {
                     Mapping.ConstructedProperty.ReconstructionCondition reconstructionCondition = constructedProperty.getReconstructionCondition();
                     if (reconstructionCondition != null) {
-                        List<Mapping> cascadedMappings = cascadeEventMapping.computeIfAbsent(reconstructionCondition.getTable(), k -> new ArrayList<>());
-                        cascadedMappings.add(mapping);
+                        List<Mapping> eventMapping = singleReconstructEventMapping.computeIfAbsent(reconstructionCondition.getTable(), k -> new ArrayList<>());
+                        eventMapping.add(mapping);
                     }
+                }
+            }
+            List<Mapping.MultipleDocumentUpdateEvent> multipleDocumentUpdateEvents = mapping.getMultipleDocumentsUpdateEvents();
+            if (multipleDocumentUpdateEvents != null) {
+                for (Mapping.MultipleDocumentUpdateEvent event : multipleDocumentUpdateEvents) {
+                    List<Mapping> eventMapping = batchReconstructEventMapping.computeIfAbsent(event.onTable, k -> new ArrayList<>());
+                    eventMapping.add(mapping);
                 }
             }
         }
@@ -60,6 +79,11 @@ public class EsMappingProperties {
         private Map<String, SimpleProperty> simplePropertyMap;
         @Valid
         private List<ConstructedProperty> constructedProperties;
+        /**
+         * mysql changes that will trigger updates on multiple documents
+         */
+        @Valid
+        private List<MultipleDocumentUpdateEvent> multipleDocumentsUpdateEvents;
 
         public String getEsIndex() {
             return StringUtils.isEmpty(esIndex) ? table : esIndex;
@@ -270,6 +294,44 @@ public class EsMappingProperties {
             public void setSql(String sql) {
                 this.sql = sql;
                 ParsedSql parsedSql = NamedParameterUtils.parseSqlStatement(sql);
+                parameterNames = new HashSet<>(parsedSql.getParameterNames());
+            }
+        }
+
+        /**
+         * changes that will trigger updates on multiple documents
+         */
+        @Validated
+        @Data
+        public static class MultipleDocumentUpdateEvent {
+            /**
+             * changes on table that will trigger updates event
+             */
+            private String onTable;
+            /**
+             * changes on columns that will trigger updates event
+             * if null, any change on the table will trigger updates event
+             */
+            private List<String> onColumns;
+            /**
+             * sql to retrieve ES index id and foreign key (physical or logical)
+             */
+            private String retrieveIndexIdAndForeignKeySql;
+
+            /**
+             * parameter names extract from {@link MultipleDocumentUpdateEvent#retrieveIndexIdAndForeignKeySql}
+             */
+            @Setter(AccessLevel.NONE)
+            private Set<String> parameterNames;
+            /**
+             * index properties should be updated
+             */
+            private List<String> updateProperties;
+
+
+            public void setRetrieveIndexIdAndForeignKeySql(String retrieveIndexIdAndForeignKeySql) {
+                this.retrieveIndexIdAndForeignKeySql = retrieveIndexIdAndForeignKeySql;
+                ParsedSql parsedSql = NamedParameterUtils.parseSqlStatement(retrieveIndexIdAndForeignKeySql);
                 parameterNames = new HashSet<>(parsedSql.getParameterNames());
             }
         }

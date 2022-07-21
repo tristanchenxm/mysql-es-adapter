@@ -51,4 +51,7 @@ public class EsRepository {
         return operations.exists(id, IndexCoordinates.of(indexName));
     }
 
+    public void refresh(String indexName) {
+        operations.indexOps(IndexCoordinates.of(indexName)).refresh();
+    }
 }
